@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Tetris</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/0.13.3/react-with-addons.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/0.13.3/JSXTransformer.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+
+  <style>
+    #grid-table {
+      border-collapse: collapse;
+      width: 350px;
+      height: 700px;
+      float: left;
+      margin-right: 20px;
+    }
+
+    #grid-table td {
+      border: 1px solid #aac;
+    }
+
+    #grid-table td.filled {
+      background-color: #228;
+    }
+
+    #next-shape-table {
+      border-collapse: collapse;
+      width: 105px;
+      height: 140px;
+      margin-top: 20px;
+    }
+
+    #next-shape-table td.filled {
+      background-color: #7c7;
+    }
+
+    #score {
+      font-size: 50px;
+      color: #ec2;
+      font-family: Impact, Charcoal, sans-serif;
+    }
+
+    #game-over {
+      font-size: 70px;
+      color: #498;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="content">
+  </div>
+
+  <script type="text/jsx">
+    var Cell = React.createClass({
+      render: function() {
+        var cx = React.addons.classSet;
+        var classes = cx({
+          'filled': this.props.filled
+        });
+
+        return (
+          <td id={this.props.id} className={classes}>
+          </td>
+        )
+      }
+    });
+
+    var Row = React.createClass({
+      render: function() {
+        return (
+          <tr id={this.props.id}>
+            {this.props.cells}
+          </tr>
+        )
+      }
+    });
+
+    var Game = React.createClass({
+      pickRandomShape: function() {
+        return this.props.allShapes[
+          Math.floor(Math.random()*this.props.allShapes.length)
+        ];
+      },
+
+      getInitialState: function() {
+        var bitmap = [];
+
+        for (var i = 0; i < 24; i++) {
+          var row = [];
+          for (var j = 0; j < 10; j++) {
+            row.push(false);
+          }
+          bitmap.push(row);
+        }
+
+        return {
+          bitmap: bitmap,
+          fallingShape: zShape,
+          nextShape: sShape,
+          fallingX: 4,
+          fallingY: 0,
+          score: 0
+        };
+      },
+
+      setShapeBits: function(bit) {
+        var updatedBitmap = this.state.bitmap.slice();
+
+        this.state.fallingShape.offsetCoords(
+          this.state.fallingX,
+          this.state.fallingY
+        ).forEach(function(point) {
+          var finalX = point[0];
+          var finalY = point[1];
+          updatedBitmap[finalY][finalX] = bit;
+        });
+
+        this.setState({ bitmap: updatedBitmap });
+      },
+
+      drawShape: function() {
+        this.setShapeBits(true);
+      },
+
+      clearShape: function() {
+        this.setShapeBits(false);
+      },
+
+      clearRows: function() {
+        var rowsCleared = 0;
+        var updatedBitmap = this.state.bitmap.slice();
+
+        for (var i = 23; i > 0; i--) {
+          var rowFilled = updatedBitmap[i].every(function(bit) {
+            return bit;
+          });
+
+          if (rowFilled) {
+            rowsCleared++;
+            updatedBitmap.splice(i, 1);
+            updatedBitmap.unshift(
+              [false,false,false,false,false,false,false,false,false,false]
+            );
+            i++;
+          };
+        }
+
+        if (rowsCleared > 0) {
+          this.setState({
+            bitmap: updatedBitmap,
+            score: this.state.score + rowsCleared
+          });
+        }
+      },
+
+      isObstructionAt: function(x, y) {
+        return this.state.bitmap[y][x];
+      },
+
+      isWithinBounds: function(x, y) {
+        return (x >= 0 && x <= 9 && y >= 0 && y <= 23);
+      },
+
+      valueOrDefault: function(value, defaultValue) {
+        if (typeof value == 'undefined') {
+          return defaultValue;
+        } else {
+          return value;
+        }
+      },
+
+      isShapeLocationValid: function(shape, x, y) {
+        shape = this.valueOrDefault(shape, this.state.fallingShape);
+        x = this.valueOrDefault(x, this.state.fallingX);
+        y = this.valueOrDefault(y, this.state.fallingY);
+
+        return shape.offsetCoords(x, y).every(function(point) {
+          return (
+            this.isWithinBounds(point[0], point[1]) &&
+            !this.isObstructionAt(point[0], point[1])
+          )
+        }, this);
+      },
+
+      isDownObstructed: function(shape, x, y) {
+        shape = this.valueOrDefault(shape, this.state.fallingShape);
+        x = this.valueOrDefault(x, this.state.fallingX);
+        y = this.valueOrDefault(y, this.state.fallingY);
+
+        return !this.isShapeLocationValid(shape, x, y + 1);
+      },
+
+      isLeftObstructed: function(shape, x, y) {
+        shape = this.valueOrDefault(shape, this.state.fallingShape);
+        x = this.valueOrDefault(x, this.state.fallingX);
+        y = this.valueOrDefault(y, this.state.fallingY);
+
+        return !this.isShapeLocationValid(shape, x - 1, y);
+      },
+
+      isRightObstructed: function(shape, x, y) {
+        shape = this.valueOrDefault(shape, this.state.fallingShape);
+        x = this.valueOrDefault(x, this.state.fallingX);
+        y = this.valueOrDefault(y, this.state.fallingY);
+
+        return !this.isShapeLocationValid(shape, x + 1, y);
+      },
+
+      applyGravity: function() {
+        this.clearShape();
+        if (this.isDownObstructed()) {
+          this.drawShape();
+          this.clearRows();
+          this.dropRandomShape();
+          if (this.isDownObstructed()) {
+            clearInterval(this.state.intervalId);
+            this.setState({ lost: 'Finito!' });
+          }
+        } else {
+          this.setState({ fallingY: (this.state.fallingY + 1) });
+          this.drawShape();
+        }
+      },
+
+      moveShapeLeft: function() {
+        this.clearShape();
+        if (!this.isLeftObstructed()) {
+          this.setState({ fallingX: (this.state.fallingX - 1) });
+        }
+        this.drawShape();
+      },
+
+      moveShapeRight: function() {
+        this.clearShape();
+        if (!this.isRightObstructed()) {
+          this.setState({ fallingX: (this.state.fallingX + 1) });
+        }
+        this.drawShape();
+      },
+
+      rotateShape: function() {
+        var rotatedShape = this.state.fallingShape.buildRotated();
+
+        this.clearShape();
+
+        if (this.isShapeLocationValid(rotatedShape)) {
+          this.setState({ fallingShape: rotatedShape });
+        } else {
+          var newX = 0;
+
+          for (var i = 1; i < rotatedShape.width; i++) {
+            var attemptedX = this.state.fallingX - i;
+
+            if (this.isShapeLocationValid(rotatedShape, attemptedX)) {
+              newX = attemptedX;
+              break;
+            }
+          }
+
+          if (newX > 0) {
+            this.setState({
+              fallingShape: rotatedShape,
+              fallingX: newX
+            });
+          }
+        }
+        this.drawShape();
+      },
+
+      slamShape: function() {
+        this.clearShape();
+        var newY = 0;
+
+        for (var y = (this.state.fallingY + 1); y < 25; y++) {
+          var validLoc = this.isShapeLocationValid(
+            this.state.fallingShape,
+            this.state.fallingX,
+            y
+          );
+
+          if (!validLoc) {
+            newY = y - 1;
+            break;
+          }
+        }
+
+        if (newY > this.state.fallingY) {
+          this.setState({ fallingY: newY });
+        }
+
+        this.drawShape();
+      },
+
+      dropRandomShape: function() {
+        this.setState({
+          fallingShape: this.state.nextShape,
+          nextShape: this.pickRandomShape(),
+          fallingX: 4,
+          fallingY: (4 - this.state.nextShape.height)
+        });
+      },
+
+      componentDidMount: function() {
+        window.addEventListener('keydown', function (e) {
+          var intKey = (window.Event) ? e.which : e.keyCode;
+          switch(intKey) {
+            case 37:
+              this.moveShapeLeft();
+              break;
+            case 39:
+              this.moveShapeRight();
+              break;
+            case 38:
+              this.rotateShape();
+              break;
+            case 40:
+              this.slamShape();
+              break;
+          }
+        }.bind(this));
+
+        var shape = this.pickRandomShape();
+        var nextShape = this.pickRandomShape();
+
+        this.setState({
+          fallingShape: shape,
+          nextShape: nextShape,
+          fallingY: (4 - shape.height),
+          intervalId: setInterval(this.applyGravity, 300)
+        });
+      },
+
+      render: function() {
+        var rows = [];
+        var nextShapeRows = [];
+
+        for (var yCoord = 4; yCoord < 24; yCoord++) {
+          var cells = this.state.bitmap[yCoord].map(function(isFilled, xCoord){
+            var key = 'c' + yCoord + 'x' + xCoord;
+
+            return (
+              <Cell id={key} key={key} filled={isFilled} />
+            )
+          });
+
+          var key = 'r' + yCoord;
+
+          rows.push(
+            <Row cells={cells} key={key} id={key} />
+          )
+        }
+
+        for (var rowNum = 0; rowNum < 4; rowNum++) {
+          var cells = [];
+
+          for (var colNum = 0; colNum < 3; colNum++) {
+            var key = 'ns-r' + rowNum + 'c' + colNum;
+            row = this.state.nextShape.pattern[rowNum];
+
+            if (row && row[colNum] === 'x') {
+              cells.push(<Cell key={key} filled={true} />)
+            } else {
+              cells.push(<Cell key={key} filled={false} />)
+            }
+          }
+
+          var key = 'ns-r' + rowNum;
+          nextShapeRows.push(
+            <Row cells={cells} key={key} />
+          )
+        }
+
+        return (
+          <div id="game">
+            <table id="grid-table">
+              <tbody id="grid">
+                {rows}
+              </tbody>
+            </table>
+
+            <div id="score">
+              {this.state.score}
+              <div id="game-over">
+                {this.state.lost}
+              </div>
+            </div>
+
+            <table id="next-shape-table">
+              <tbody id="next-shape">
+                {nextShapeRows}
+              </tbody>
+            </table>
+          </div>
+        )
+      }
+    });
+
+    var Shape = function Shape(patterns, bitSets, orientation) {
+      this.patterns = patterns;
+
+      this.bitSets = bitSets || patterns.map(function(pattern) {
+        var coords = [];
+
+        pattern.forEach(function(line, yCoord) {
+          line.forEach(function(value, xCoord) {
+            if (value === 'x') {
+              coords.push([xCoord, yCoord]);
+            }
+          });
+        });
+
+        return coords;
+      });
+
+      this.dimensions = this.bitSets.map(function(coords) {
+        var maxX = 0;
+        var maxY = 0;
+
+        coords.forEach(function(point) {
+          if (point[0] > maxX) { maxX = point[0]; }
+          if (point[1] > maxY) { maxY = point[1]; }
+        });
+
+        return ([maxX + 1, maxY + 1]);
+      });
+
+      this.orientation = orientation || 0;
+      this.pattern = this.patterns[this.orientation];
+      this.bitSet = this.bitSets[this.orientation];
+      this.width = this.dimensions[this.orientation][0];
+      this.height = this.dimensions[this.orientation][1];
+
+      this.offsetCoords = function(x, y) {
+        return this.bitSet.map(function(point) {
+          return this.offsetPoint(point, x, y);
+        }, this);
+      }
+
+      this.offsetPoint = function(point, xOffset, yOffset) {
+        return ([point[0] + xOffset, point[1] + yOffset]);
+      }
+
+      this.buildRotated = function() {
+        var newOrientation = this.orientation + 1;
+
+        if (newOrientation > (this.bitSets.length - 1)) {
+          newOrientation = 0;
+        }
+
+        return new Shape(this.patterns, this.bitSets, newOrientation);
+      }
+    }
+
+    var oShape = new Shape(
+      [[ ['x', 'x'],
+         ['x', 'x'] ]]
+    );
+
+    var iShape = new Shape(
+      [
+        [ ['x'],
+          ['x'],
+          ['x'],
+          ['x'] ],
+
+        [['x', 'x', 'x', 'x']],
+      ]
+    );
+
+    var sShape = new Shape(
+      [
+        [ [' ', 'x', 'x'],
+          ['x', 'x'] ],
+
+        [ ['x'],
+          ['x', 'x'],
+          [' ', 'x'] ]
+      ]
+    );
+
+    var zShape = new Shape(
+      [
+        [ ['x', 'x'],
+          [' ', 'x', 'x'] ],
+
+        [ [' ', 'x'],
+          ['x', 'x'],
+          ['x'] ]
+      ]
+    );
+
+    var lShape = new Shape(
+      [
+        [ ['x'],
+          ['x'],
+          ['x', 'x'] ],
+
+        [ ['x', 'x', 'x'],
+          ['x'] ],
+
+        [ ['x', 'x'],
+          [' ', 'x'],
+          [' ', 'x'] ],
+
+        [ [' ', ' ', 'x'],
+          ['x', 'x', 'x'] ]
+      ]
+    );
+
+    var jShape = new Shape(
+      [
+        [ [' ', 'x'],
+          [' ', 'x'],
+          ['x', 'x'] ],
+
+        [ ['x'],
+          ['x', 'x', 'x'] ],
+
+        [ ['x', 'x'],
+          ['x'],
+          ['x'] ],
+
+        [ ['x', 'x', 'x'],
+          [' ', ' ', 'x'] ]
+      ]
+    );
+
+    var tShape = new Shape(
+      [
+        [ ['x', 'x', 'x'],
+          [' ', 'x'] ],
+
+        [ [' ', 'x'],
+          ['x', 'x'],
+          [' ', 'x'] ],
+
+        [ [' ', 'x'],
+          ['x', 'x', 'x'] ],
+
+        [ ['x'],
+          ['x', 'x'],
+          ['x'] ]
+      ]
+    );
+
+
+    function main() {
+      var allShapes = [
+        oShape, iShape, sShape, zShape, lShape, jShape, tShape
+      ];
+
+      React.render(
+        <Game allShapes={allShapes} />,
+        document.getElementById('content')
+      );
+    }
+
+    $(main);
+  </script>
+</body>
+</html>

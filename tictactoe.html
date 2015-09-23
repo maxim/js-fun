@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Tic Tac Toe</title>
+  <script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+
+  <style>
+    body {
+      font-family: Monaco;
+    }
+
+    #ttt {
+      border: 1px solid #cca;
+    }
+
+    #ttt td {
+      background-color: #ffe;
+      border: 1px solid #cca;
+      width: 200px;
+      height: 200px;
+      text-align: center;
+      font-size: 140px;
+    }
+
+    .line {
+      position: absolute;
+      font-size: 700px;
+      color: #44a;
+      opacity: 0.9;
+      display: none;
+    }
+
+    #line1 { top: -570px; left: 19px; font-size: 600px; }
+    #line2 { top: -370px; left: 19px; font-size: 600px; }
+    #line3 { top: -170px; left: 19px; font-size: 600px; }
+    #line4 { top: -158px; left: -235px; }
+    #line5 { top: -158px; left: -35px; }
+    #line6 { top: -158px; left: 165px; }
+    #line7 { top: -250px; left: 30px; }
+    #line8 { top: -250px; left: 30px; }
+
+    span.x { color: #f3c; }
+    span.o { color: #3a5; }
+  </style>
+</head>
+
+<body>
+  <table id="ttt">
+    <div id="line1" class="line">&#65343;</div>
+    <div id="line2" class="line">&#65343;</div>
+    <div id="line3" class="line">&#65343;</div>
+    <div id="line4" class="line">&#65372;</div>
+    <div id="line5" class="line">&#65372;</div>
+    <div id="line6" class="line">&#65372;</div>
+    <div id="line7" class="line">&#10189;</div>
+    <div id="line8" class="line">&#10187;</div>
+
+    <tbody>
+      <tr>
+        <td id="c1"></td>
+        <td id="c2"></td>
+        <td id="c3"></td>
+      </tr>
+      <tr>
+        <td id="c4"></td>
+        <td id="c5"></td>
+        <td id="c6"></td>
+      </tr>
+      <tr>
+        <td id="c7"></td>
+        <td id="c8"></td>
+        <td id="c9"></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Double-click to take your turn.</h2>
+
+  <script>
+    function renderBoard(board) {
+      for (i = 1; i < 10; i++) {
+        var element = document.getElementById("c" + i);
+        if (board[i-1] === 'x') {
+          element.innerHTML = '<span class="x">x</span>';
+        } else if (board[i-1] === 'o') {
+          element.innerHTML = '<span class="o">o</span>';
+        } else {
+          element.innerHTML = '';
+        }
+      }
+    };
+
+    function findCellIndex(element) {
+      if (element.tagName == 'SPAN') {
+        element = element.parentElement
+      }
+
+      var indexString = null;
+
+      if (indexString = element.id.match(/\d/)[0]) {
+        return (parseInt(indexString) - 1);
+      } else {
+        return null;
+      }
+    }
+
+    function flippedPlayerMark(currentMark) {
+      if (currentMark == 'x') {
+        return 'o';
+      } else {
+        return 'x';
+      }
+    }
+
+    function findWinCondition(board, winConditions) {
+      var winConditionIndex = null;
+
+      ['x', 'o'].forEach(function(mark) {
+        winConditions.forEach(function (pattern, patternIndex) {
+          var result = pattern.every(function (boardIndex) {
+            return (board[boardIndex] === mark);
+          });
+
+          if (result) { winConditionIndex = patternIndex; }
+        });
+      });
+
+      return winConditionIndex;
+    }
+
+    function isBoardFull(board) {
+      return board.every(function(value) {
+        return (value !== null);
+      });
+    }
+
+    function emptyBoard() {
+      return [
+        null, null, null,
+        null, null, null,
+        null, null, null
+      ];
+    }
+
+    function main() {
+      var board = emptyBoard();
+      var winConditions = [
+        [0,1,2], [3,4,5], [6,7,8],
+        [0,3,6], [1,4,7], [2,5,8],
+        [0,4,8], [2,4,6]
+      ];
+      var currentPlayerMark = 'x';
+      var won = false;
+
+      renderBoard(board);
+
+      $('body').dblclick(function(event) {
+        if (won === true) {
+          won = false;
+          board = emptyBoard();
+          renderBoard(board);
+          $('.line').hide();
+          return;
+        }
+
+        cellIndex = findCellIndex(event.target);
+        if (cellIndex === null) { return; }
+
+        if (!board[cellIndex]) {
+          board[cellIndex] = currentPlayerMark;
+          currentPlayerMark = flippedPlayerMark(currentPlayerMark);
+        }
+        renderBoard(board);
+        winConditionIndex = findWinCondition(board, winConditions);
+        if (winConditionIndex !== null) {
+          $('#line' + (winConditionIndex + 1)).show();
+          won = true;
+        }
+
+        if (isBoardFull(board)) {
+          $('.line').show();
+          won = true;
+        }
+      });
+    }
+
+    $(main);
+  </script>
+</body>
+</html>
